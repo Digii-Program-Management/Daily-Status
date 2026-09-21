@@ -32,9 +32,8 @@ jobs:
             const token = process.env.CLICKUP_TOKEN ? process.env.CLICKUP_TOKEN.trim() : '';
             if (!token) throw new Error('CLICKUP_TOKEN secret is missing or empty in GitHub Settings.');
 
-            // Target the clean, processed List ID digits from your URL
-            const listId = '3592954'; 
-            const apiUrl = 'https://clickup.com/' + listId + '/task';
+            // Hardcoding the full absolute API endpoint directly to bypass any text caching errors
+            const apiUrl = 'https://clickup.com';
             console.log('Targeting API URL Endpoint: ' + apiUrl);
 
             const response = await fetch(apiUrl, {
