@@ -34,7 +34,7 @@ jobs:
 
             // Target the clean, processed List ID digits from your URL
             const listId = '3592954'; 
-            const apiUrl = 'https://clickup.com' + listId + '/task';
+            const apiUrl = 'https://clickup.com/' + listId + '/task';
             console.log('Targeting API URL Endpoint: ' + apiUrl);
 
             const response = await fetch(apiUrl, {
