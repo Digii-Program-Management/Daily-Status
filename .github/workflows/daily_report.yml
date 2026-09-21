@@ -23,7 +23,7 @@ jobs:
       env:
         CLICKUP_TOKEN: \${{ secrets.CLICKUP_TOKEN }}
         # Replace this with your actual ClickUp View or List ID
-        CLICKUP_VIEW_ID: "90123456" 
+        CLICKUP_VIEW_ID: "3478950" 
       run: |
         node -e "
         const fs = require('fs');
