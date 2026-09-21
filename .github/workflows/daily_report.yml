@@ -21,28 +21,27 @@ jobs:
     - name: Process ClickUp Payload and Compile
       env:
         CLICKUP_TOKEN: ${{ secrets.CLICKUP_TOKEN }}
-        # Put JUST the number here (e.g., "3478950")
-        CLICKUP_VIEW_ID: "3478950" 
       run: |
         node -e "
         const fs = require('fs');
 
         async function run() {
           try {
-            console.log('Requesting latest task metrics from ClickUp...');
+            console.log('Requesting latest task metrics from ClickUp List API...');
             
             const token = process.env.CLICKUP_TOKEN ? process.env.CLICKUP_TOKEN.trim() : '';
-            const viewId = process.env.CLICKUP_VIEW_ID ? process.env.CLICKUP_VIEW_ID.trim() : '';
-
             if (!token) throw new Error('CLICKUP_TOKEN secret is missing or empty in GitHub Settings.');
-            if (!viewId || viewId.includes('PASTE_YOUR_')) throw new Error('CLICKUP_VIEW_ID is missing its actual ID.');
 
-            // Fixed the URL structure to ensure the slash is completely secure
-            const apiUrl = 'https://clickup.com/' + viewId + '/task';
+            // Target the clean, processed List ID digits from your URL
+            const listId = '3592954'; 
+            const apiUrl = 'https://clickup.com' + listId + '/task';
             console.log('Targeting API URL Endpoint: ' + apiUrl);
 
             const response = await fetch(apiUrl, {
-              headers: { 'Authorization': token }
+              headers: { 
+                'Authorization': token,
+                'Content-Type': 'application/json'
+              }
             });
             
             if (!response.ok) {
@@ -57,7 +56,6 @@ jobs:
 
             console.log('Successfully fetched ' + data.tasks.length + ' tasks. Formatting data mapping...');
 
-            // Format array layout payload with absolute null/undefined safety wrappers
             const formattedTasks = data.tasks.map(task => {
               const getCustomField = (name) => {
                 if (!task.custom_fields || !Array.isArray(task.custom_fields)) return 'N/A';
@@ -80,17 +78,14 @@ jobs:
               throw new Error('File \"dashboard_template.html\" was not found in the root of your repository.');
             }
 
-            // Read your custom visual interface file layout
             let templateHtml = fs.readFileSync('dashboard_template.html', 'utf8');
 
             if (!templateHtml.includes('<!-- CLICKUP_DATA_ROWS -->')) {
               throw new Error('Token \"<!-- CLICKUP_DATA_ROWS -->\" was not found inside dashboard_template.html.');
             }
 
-            // Replace the configuration hook with your real-time collection metrics
             let finalOutputHtml = templateHtml.replace('<!-- CLICKUP_DATA_ROWS -->', dataPayloadString);
 
-            // Compile it directly as the running production index file
             fs.writeFileSync('index.html', finalOutputHtml);
             console.log('✓ Ingestion successfully pushed to index.html.');
             
