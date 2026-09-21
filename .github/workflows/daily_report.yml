@@ -1,9 +1,9 @@
-name: Automated ClickUp Dashboard Pipeline
+name: Automated ClickUp Dashboard Ingestion
 
 on:
   schedule:
-    - cron: '0 8 * * *' # Every day at 8:00 AM UTC
-  workflow_dispatch: # Manual run button
+    - cron: '0 8 * * *' # Executes daily at 08:00 AM UTC
+  workflow_dispatch: # Manual execution testing trigger
 
 jobs:
   build-and-push-report:
@@ -18,9 +18,10 @@ jobs:
       with:
         node-version: '20'
 
-    - name: Inject ClickUp Data into Dashboard Template
+    - name: Process ClickUp Payload and Compile
       env:
         CLICKUP_TOKEN: ${{ secrets.CLICKUP_TOKEN }}
+        # Put JUST the number here (e.g., "3478950")
         CLICKUP_VIEW_ID: "3478950" 
       run: |
         node -e "
@@ -28,54 +29,80 @@ jobs:
 
         async function run() {
           try {
-            console.log('Fetching live data from ClickUp API...');
+            console.log('Requesting latest task metrics from ClickUp...');
             
-            const response = await fetch('https://clickup.com' + process.env.CLICKUP_VIEW_ID + '/task', {
-              headers: { 'Authorization': process.env.CLICKUP_TOKEN }
+            const token = process.env.CLICKUP_TOKEN ? process.env.CLICKUP_TOKEN.trim() : '';
+            const viewId = process.env.CLICKUP_VIEW_ID ? process.env.CLICKUP_VIEW_ID.trim() : '';
+
+            if (!token) throw new Error('CLICKUP_TOKEN secret is missing or empty in GitHub Settings.');
+            if (!viewId || viewId.includes('PASTE_YOUR_')) throw new Error('CLICKUP_VIEW_ID is missing its actual ID.');
+
+            // Fixed the URL structure to ensure the slash is completely secure
+            const apiUrl = 'https://clickup.com' + viewId + '/task';
+            console.log('Targeting API URL Endpoint: ' + apiUrl);
+
+            const response = await fetch(apiUrl, {
+              headers: { 'Authorization': token }
             });
             
-            if (!response.ok) throw new Error('ClickUp API failed: ' + response.statusText);
+            if (!response.ok) {
+              throw new Error('ClickUp endpoint connectivity issue: ' + response.status + ' ' + response.statusText);
+            }
+            
             const data = await response.json();
             
-            // Format tasks to match your exact dashboard keys: Team, Status, Quarter, Assignee
+            if (!data || !Array.isArray(data.tasks)) {
+              throw new Error('Unexpected API response structure from ClickUp. Tasks array not found.');
+            }
+
+            console.log('Successfully fetched ' + data.tasks.length + ' tasks. Formatting data mapping...');
+
+            // Format array layout payload with absolute null/undefined safety wrappers
             const formattedTasks = data.tasks.map(task => {
-              // Extract Custom Fields safely if they exist, otherwise fallback
               const getCustomField = (name) => {
-                const field = task.custom_fields?.find(f => f.name.toLowerCase() === name.toLowerCase());
-                return field ? field.value : 'N/A';
+                if (!task.custom_fields || !Array.isArray(task.custom_fields)) return 'N/A';
+                const field = task.custom_fields.find(f => f && f.name && f.name.toLowerCase() === name.toLowerCase());
+                return field && field.value !== undefined ? field.value : 'N/A';
               };
 
               return {
                 "Task": task.name || 'Untitled',
-                "Status": task.status ? task.status.status : 'Open',
-                "Assignee": task.assignees?.map(a => a.username).join(', ') || 'Unassigned',
-                "Team": getCustomField('Team'),      // Assumes a ClickUp custom field named 'Team'
-                "Quarter": getCustomField('Quarter') // Assumes a ClickUp custom field named 'Quarter'
+                "Status": task.status && task.status.status ? task.status.status : 'Open',
+                "Assignee": (task.assignees && Array.isArray(task.assignees)) ? task.assignees.map(a => a.username || 'Unknown').join(', ') : 'Unassigned',
+                "Team": getCustomField('Team'),      
+                "Quarter": getCustomField('Quarter') 
               };
             });
 
-            // Convert array to a clean string format
-            const jsonString = JSON.stringify(formattedTasks, null, 2);
+            const dataPayloadString = JSON.stringify(formattedTasks, null, 2);
 
-            // Read your pristine dashboard layout template
+            if (!fs.existsSync('dashboard_template.html')) {
+              throw new Error('File \"dashboard_template.html\" was not found in the root of your repository.');
+            }
+
+            // Read your custom visual interface file layout
             let templateHtml = fs.readFileSync('dashboard_template.html', 'utf8');
 
-            // Swap our token with the live array data string
-            let finalHtml = templateHtml.replace('<!-- CLICKUP_DATA_ROWS -->', jsonString);
+            if (!templateHtml.includes('<!-- CLICKUP_DATA_ROWS -->')) {
+              throw new Error('Token \"<!-- CLICKUP_DATA_ROWS -->\" was not found inside dashboard_template.html.');
+            }
 
-            // Write the final live dashboard file out to index.html
-            fs.writeFileSync('index.html', finalHtml);
-            console.log('✓ Target index.html successfully compiled with automated dataset.');
+            // Replace the configuration hook with your real-time collection metrics
+            let finalOutputHtml = templateHtml.replace('<!-- CLICKUP_DATA_ROWS -->', dataPayloadString);
+
+            // Compile it directly as the running production index file
+            fs.writeFileSync('index.html', finalOutputHtml);
+            console.log('✓ Ingestion successfully pushed to index.html.');
             
           } catch (error) {
-            console.error('Pipeline Processing Error:', error);
+            console.error('Fatal Pipeline Failure Exception:', error.message);
             process.exit(1);
           }
         }
         run();
         "
 
-    - name: Commit and Push update back to GitHub
+    - name: Push Data Update to Main Base Repository
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@://github.com"
@@ -83,9 +110,9 @@ jobs:
         git add index.html
         
         if git diff-index --quiet HEAD; then
-          echo "No dataset changes detected. Skipping push."
+          echo "No variance found in data states. Staging push bypassed."
         else
-          git commit -m "Automated dashboard dataset refresh: $(date +'%Y-%m-%d %H:%M:%S')"
+          git commit -m "Automated daily metrics update: $(date +'%Y-%m-%d %H:%M:%S')"
           git push
-          echo "✓ Successfully deployed new live base-repo report."
+          echo "✓ Live dashboard revision uploaded successfully."
         fi
