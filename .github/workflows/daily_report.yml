@@ -38,7 +38,7 @@ jobs:
             if (!viewId || viewId.includes('PASTE_YOUR_')) throw new Error('CLICKUP_VIEW_ID is missing its actual ID.');
 
             // Fixed the URL structure to ensure the slash is completely secure
-            const apiUrl = 'https://clickup.com' + viewId + '/task';
+            const apiUrl = 'https://clickup.com/' + viewId + '/task';
             console.log('Targeting API URL Endpoint: ' + apiUrl);
 
             const response = await fetch(apiUrl, {
