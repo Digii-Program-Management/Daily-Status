@@ -290,9 +290,7 @@
                 <thead class="bg-slate-100/80 uppercase text-[11px] font-semibold text-slate-600 border-b border-slate-200">
                     <tr id="tableHeadRow"></tr>
                 </thead>
-                <tbody id="tableBody" class="divide-y divide-slate-200/60">
-                    <tr><td class="text-center p-12 text-slate-400">Upload an Excel file to display task data.</td></tr>
-                </tbody>
+                <tbody id="tableBody" class="divide-y divide-slate-200/60"></tbody>
             </table>
         </div>
     </section>
@@ -999,6 +997,10 @@
 
             table.querySelectorAll('th.resizable').forEach(attachHandlers);
         }
-    </script>
+    <script>
+  // This variable holds the live pipeline data fed by GitHub
+  window.clickupImportedData = <!-- CLICKUP_DATA_ROWS -->;
+</script>
+
 </body>
 </html>
