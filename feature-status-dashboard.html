@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature Status Dashboard</title>
+    <!-- Tailwind CSS, Chart.js, SheetJS, Choices.js, jsPDF & AutoTable -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; color: #0f172a; }
+        .glass-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04); }
+        .kpi-tile { cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .kpi-tile:hover { transform: translateY(-3px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08); }
+
+        /* Choices JS Clean Theme Overrides & Fixed Text Overlay */
+        .choices__inner { border-radius: 8px !important; border-color: #cbd5e1 !important; background: #ffffff !important; min-height: 42px !important; padding: 4px 8px !important; font-size: 13px !important; }
+        .choices__input { font-size: 13px !important; color: #0f172a !important; background-color: transparent !important; }
+        .choices[data-type*="select-multiple"] .choices__button { border-left-color: rgba(0,0,0,0.2) !important; filter: invert(0.3); }
+
+        /* Selected Filter Tag Fix (Readable Dark Text on Light Pill) */
+        .choices__list--multiple .choices__item {
+            background-color: #e2e8f0 !important;
+            color: #1e293b !important;
+            border: 1px solid #cbd5e1 !important;
+            border-radius: 6px !important;
+            font-size: 12px !important;
+            font-weight: 500 !important;
+        }
+
+        /* Custom Checkboxes in Dropdown */
+        .choices__list--dropdown, .choices__list[aria-expanded] { background-color: #ffffff !important; }
+        .choices__list--dropdown .choices__list { background-color: #ffffff !important; }
+        .choices__list--dropdown .choices__item { position: relative; padding-left: 28px !important; color: #334155 !important; background-color: #ffffff !important; }
+        .choices__list--dropdown .choices__item::before { content: ""; position: absolute; left: 8px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; border: 1px solid #cbd5e1; border-radius: 3px; background-color: #fff; }
+        /* Highlighted (hovered/keyboard-focused) option: force readable dark text on a light indigo backdrop
+           instead of the library's default (which renders white text and is unreadable here) */
+        .choices__list--dropdown .choices__item.is-highlighted {
+            background-color: #eef2ff !important;
+            color: #312e81 !important;
+        }
+        .choices__list--dropdown .choices__item.is-highlighted::before { border-color: #4f46e5 !important; background-color: #fff !important; }
+        .choices__list--dropdown .choices__item[aria-selected="true"]::before { background-color: #4f46e5 !important; border-color: #4f46e5 !important; }
+        .choices__list--dropdown .choices__item[aria-selected="true"]::after { content: "✓"; position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: white; font-size: 10px; font-weight: bold; }
+
+        /* Interactive Optgroup Headers with Checkbox */
+        .choices__group .choices__heading {
+            position: relative;
+            padding-left: 28px !important;
+            font-weight: 700;
+            color: #4338ca;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding-top: 8px;
+            padding-bottom: 6px;
+            background-color: #f8fafc;
+            cursor: pointer;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .choices__group .choices__heading::before {
+            content: "";
+            position: absolute;
+            left: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 14px;
+            height: 14px;
+            border: 1px solid #a5b4fc;
+            border-radius: 3px;
+            background-color: #e0e7ff;
+        }
+
+        /* Resizable Columns */
+        th.resizable { position: relative; }
+        .resizer { position: absolute; right: 0; top: 0; height: 100%; width: 5px; background: transparent; cursor: col-resize; user-select: none; }
+        .resizer:hover, .resizing { background-color: #6366f1; }
+
+        /* KPI tile info tooltip */
+        .tile-info { position: relative; }
+        .tile-tooltip {
+            pointer-events: none;
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            bottom: calc(100% + 8px);
+            width: 220px;
+            background: #1e293b;
+            color: #f8fafc;
+            font-size: 10.5px;
+            font-weight: 400;
+            text-transform: none;
+            letter-spacing: normal;
+            line-height: 1.4;
+            padding: 8px 10px;
+            border-radius: 8px;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.15s ease;
+            z-index: 30;
+        }
+        .tile-info:hover .tile-tooltip { opacity: 1; visibility: visible; }
+
+        /* Toolbar buttons */
+        .toolbar-btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: #ffffff; border: 1px solid #cbd5e1; color: #334155;
+            font-weight: 500; font-size: 12px; padding: 10px 14px;
+            border-radius: 8px; transition: all 0.15s ease; white-space: nowrap;
+        }
+        .toolbar-btn:hover { background: #f8fafc; border-color: #94a3b8; }
+
+        #columnsMenu, #exportMenu { display: none; }
+        #columnsMenu.open, #exportMenu.open { display: block; }
+
+        /* Hidden column helper (kept explicit to avoid Tailwind purge issues) */
+        .col-hidden { display: none !important; }
+    </style>
+</head>
+<body class="p-6 md:p-8 max-w-[1600px] mx-auto">
+
+    <!-- Header & File Upload -->
+    <header class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-8 glass-card p-6">
+        <div>
+            <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
+                <h1 class="text-xl font-bold text-slate-900 tracking-tight">Feature Status Dashboard</h1>
+            </div>
+            <p class="text-xs text-slate-500 mt-1 pl-4">Interactive analytics view for project features, teams, and delivery milestones.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <!-- Columns visibility toggle -->
+            <div class="relative">
+                <button id="columnsBtn" onclick="toggleMenu('columnsMenu')" class="toolbar-btn">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v18M15 3v18M4 3h16a1 1 0 011 1v16a1 1 0 01-1 1H4a1 1 0 01-1-1V4a1 1 0 011-1z"/></svg>
+                    Columns
+                </button>
+                <div id="columnsMenu" class="absolute right-0 mt-2 w-60 bg-white border border-slate-200 rounded-lg shadow-lg z-40 p-2 max-h-80 overflow-y-auto">
+                    <div class="flex items-center justify-between px-2 py-1 mb-1 border-b border-slate-100">
+                        <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Show / Hide</span>
+                        <button onclick="showAllColumns()" class="text-[11px] text-indigo-600 hover:text-indigo-800 font-semibold">Reset</button>
+                    </div>
+                    <div id="columnsMenuList"></div>
+                </div>
+            </div>
+            <!-- Export -->
+            <button onclick="exportExcel()" class="toolbar-btn">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6h6v6M9 3v4a1 1 0 001 1h4a1 1 0 001-1V3M5 21h14a2 2 0 002-2V7l-4-4H5a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                Export Excel
+            </button>
+            <button onclick="exportPDF()" class="toolbar-btn">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v-8m0 8l-3-3m3 3l3-3M5 21h14a2 2 0 002-2V7l-4-4H5a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                Export PDF
+            </button>
+            <button onclick="downloadHtmlWithData()" class="toolbar-btn">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v16h16V8.5L15.5 4H4z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 15l3 3 3-3M12 10v8"/></svg>
+                Download HTML (with data)
+            </button>
+            <input type="file" id="excelFileInput" accept=".xlsx, .xls" class="hidden" />
+            <button onclick="document.getElementById('excelFileInput').click()" class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-medium px-4 py-2.5 rounded-lg text-xs shadow-sm shadow-indigo-200 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                Upload Excel Sheet
+            </button>
+        </div>
+    </header>
+
+    <!-- Multi-Select Filters -->
+    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div>
+            <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Team</label>
+            <select id="filterTeam" multiple class="w-full"></select>
+        </div>
+        <div>
+            <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Status</label>
+            <select id="filterStatus" multiple class="w-full"></select>
+        </div>
+        <div>
+            <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Quarter</label>
+            <select id="filterQuarter" multiple class="w-full"></select>
+        </div>
+        <div>
+            <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Assignee</label>
+            <select id="filterEngineer" multiple class="w-full"></select>
+        </div>
+    </section>
+
+    <!-- Clickable KPI Tiles -->
+    <section class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+        <div onclick="applyTileDrilldown('ALL')" class="glass-card kpi-tile p-5 relative overflow-hidden group">
+            <div class="absolute top-0 left-0 right-0 h-1 bg-slate-400"></div>
+            <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Tasks</span>
+            <div id="kpiTotal" class="text-3xl font-extrabold text-slate-900 mt-2 tracking-tight">0</div>
+        </div>
+        <div onclick="applyTileDrilldown('Open')" class="glass-card kpi-tile p-5 relative overflow-hidden group">
+            <div class="absolute top-0 left-0 right-0 h-1 bg-slate-500"></div>
+            <div class="flex items-center gap-1">
+                <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Open</span>
+                <span class="tile-info inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-slate-200 text-slate-500 text-[9px] font-bold cursor-help">i
+                    <span id="tileDefOpen" class="tile-tooltip"></span>
+                </span>
+            </div>
+            <div id="kpiOpen" class="text-3xl font-extrabold text-slate-900 mt-2 tracking-tight">0</div>
+        </div>
+        <div onclick="applyTileDrilldown('In Progress')" class="glass-card kpi-tile p-5 relative overflow-hidden group">
+            <div class="absolute top-0 left-0 right-0 h-1 bg-amber-500"></div>
+            <div class="flex items-center gap-1">
+                <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">In Progress</span>
+                <span class="tile-info inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-slate-200 text-slate-500 text-[9px] font-bold cursor-help">i
+                    <span id="tileDefInProgress" class="tile-tooltip"></span>
+                </span>
+            </div>
+            <div id="kpiInProgress" class="text-3xl font-extrabold text-slate-900 mt-2 tracking-tight">0</div>
+        </div>
+        <div onclick="applyTileDrilldown('Delivered')" class="glass-card kpi-tile p-5 relative overflow-hidden group">
+            <div class="absolute top-0 left-0 right-0 h-1 bg-emerald-500"></div>
+            <div class="flex items-center gap-1">
+                <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Delivered</span>
+                <span class="tile-info inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-slate-200 text-slate-500 text-[9px] font-bold cursor-help">i
+                    <span id="tileDefDelivered" class="tile-tooltip"></span>
+                </span>
+            </div>
+            <div id="kpiDelivered" class="text-3xl font-extrabold text-slate-900 mt-2 tracking-tight">0</div>
+        </div>
+        <div onclick="applyTileDrilldown('Blocked')" class="glass-card kpi-tile p-5 relative overflow-hidden group">
+            <div class="absolute top-0 left-0 right-0 h-1 bg-rose-500"></div>
+            <div class="flex items-center gap-1">
+                <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Blocked</span>
+                <span class="tile-info inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-slate-200 text-slate-500 text-[9px] font-bold cursor-help">i
+                    <span id="tileDefBlocked" class="tile-tooltip"></span>
+                </span>
+            </div>
+            <div id="kpiBlocked" class="text-3xl font-extrabold text-slate-900 mt-2 tracking-tight">0</div>
+        </div>
+        <div onclick="applyTileDrilldown('Descoped')" class="glass-card kpi-tile p-5 relative overflow-hidden group">
+            <div class="absolute top-0 left-0 right-0 h-1 bg-violet-500"></div>
+            <div class="flex items-center gap-1">
+                <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Descoped</span>
+                <span class="tile-info inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-slate-200 text-slate-500 text-[9px] font-bold cursor-help">i
+                    <span id="tileDefDescoped" class="tile-tooltip"></span>
+                </span>
+            </div>
+            <div id="kpiDescoped" class="text-3xl font-extrabold text-slate-900 mt-2 tracking-tight">0</div>
+        </div>
+    </section>
+
+    <!-- Interactive Charts -->
+    <section class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <div class="glass-card p-6 flex flex-col justify-between">
+            <div>
+                <h3 class="text-sm font-semibold text-slate-900">Team-wise Breakdown</h3>
+                <p class="text-xs text-slate-400 mt-0.5">Click any slice to filter details table</p>
+            </div>
+            <div class="relative h-64 mt-4">
+                <canvas id="donutChart"></canvas>
+            </div>
+        </div>
+        <div class="glass-card p-6 lg:col-span-2 flex flex-col justify-between">
+            <div>
+                <h3 class="text-sm font-semibold text-slate-900">Status Breakdown</h3>
+                <p class="text-xs text-slate-400 mt-0.5">Click any stacked bar segment to drill down</p>
+            </div>
+            <div class="relative h-64 mt-4">
+                <canvas id="barChart"></canvas>
+            </div>
+        </div>
+    </section>
+
+    <!-- Data Table Container -->
+    <section class="glass-card overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-100 flex flex-wrap justify-between items-center gap-3 bg-slate-50/50">
+            <div class="flex items-center gap-3">
+                <h3 class="text-sm font-semibold text-slate-900">Task Details</h3>
+                <span id="drilldownBadge" class="hidden inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-200/60"></span>
+            </div>
+            <button id="resetDrilldownBtn" onclick="resetDrilldown()" class="hidden text-xs text-indigo-600 hover:text-indigo-800 font-semibold underline underline-offset-2 transition">
+                Clear Active Drilldown Filter
+            </button>
+        </div>
+
+        <!-- Horizontally Scrollable Table Wrapper -->
+        <div class="w-full overflow-x-auto">
+            <table id="taskTable" class="w-full text-xs text-left text-slate-600 min-w-[1400px] border-collapse table-fixed">
+                <thead class="bg-slate-100/80 uppercase text-[11px] font-semibold text-slate-600 border-b border-slate-200">
+                    <tr id="tableHeadRow"></tr>
+                </thead>
+                <tbody id="tableBody" class="divide-y divide-slate-200/60">
+                    <tr><td class="text-center p-12 text-slate-400">Upload an Excel file to display task data.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <script>
+        // Captured synchronously, before any JS below mutates the DOM (Choices.js widgets,
+        // table rendering, etc). This is the pristine, un-mutated page markup, used by
+        // downloadHtmlWithData() to produce a clean standalone file with data baked in.
+        const PRISTINE_HTML = document.documentElement.outerHTML;
+
+        let rawData = [];
+        let globalFilteredData = [];
+        let currentTableData = [];
+        let activeDrilldownFilter = null;
+        let donutChartInstance = null;
+        let barChartInstance = null;
+        let choicesInstances = {};
+        let hiddenColumns = new Set();
+
+        const ALLOWED_TEAMS = ["Examinations", "Finance", "Academics", "Admissions", "MOBILE", "Workflows", "Asset Management"];
+
+        // Status -> Dashboard tile grouping (per definitions supplied)
+        const STATUS_GROUPS = {
+            'Open': ["Not Started"],
+            'In Progress': ["Ed", "Development & Dev-Testing", "Code Review", "Qa Ready", "Testing - Qa", "Qa Complete", "Pm Sign Off Complete", "Cs Sign Off Complete", "Test Failed"],
+            'Delivered': ["Launched", "Master Merged"],
+            'Blocked': ["Cs Team Dependency", "Pm Dependency", "Blocked"],
+            'Descoped': ["Cancelled"]
+        };
+
+        const TEAM_COLORS = {
+            'Finance': '#0f4c5c',
+            'Workflows': '#eab308',
+            'MOBILE': '#06b6d4',
+            'Academics': '#ea580c',
+            'Examinations': '#0284c7',
+            'Admissions': '#8b5cf6',
+            'Asset Management': '#ec4899',
+            'Other': '#94a3b8'
+        };
+
+        const STATUS_BOX_COLORS = {
+            'Blocked': 'bg-rose-50 text-rose-700 border-rose-200/80',
+            'In Progress': 'bg-sky-50 text-sky-700 border-sky-200/80',
+            'Delivered': 'bg-emerald-50 text-emerald-700 border-emerald-200/80',
+            'Open': 'bg-slate-100 text-slate-600 border-slate-200/80',
+            'Descoped': 'bg-violet-50 text-violet-700 border-violet-200/80'
+        };
+
+        // Column configuration driving the table (header labels + Excel field mapping keys)
+        const COLUMNS = [
+            { key: 'Task Name', label: 'Task Name', width: 200, pad: 'pl-6', cls: 'font-medium text-slate-900 truncate' },
+            { key: 'Institution', label: 'Institution', width: 140, cls: 'text-slate-500 truncate' },
+            { key: 'Status', label: 'Status', width: 160 },
+            { key: 'Team', label: 'Team', width: 130 },
+            { key: 'Priority', label: 'CS Priority', width: 110, cls: 'text-slate-500' },
+            { key: 'Product Priority Order', label: 'Product Priority', width: 120, cls: 'text-slate-500' },
+            { key: 'Start date', label: 'Start Date', width: 110, cls: 'text-slate-500 whitespace-nowrap overflow-hidden text-ellipsis' },
+            { key: 'Due Date', label: 'Due Date', width: 110, cls: 'text-slate-500 whitespace-nowrap overflow-hidden text-ellipsis' },
+            { key: 'Engg Efforts', label: 'Efforts', width: 90, cls: 'text-slate-500' },
+            { key: 'Remarks', label: 'Remarks', width: 160, cls: 'text-slate-500 truncate' },
+            { key: 'PM', label: 'PM', width: 120, cls: 'text-slate-700 font-medium truncate' },
+            { key: 'Assignee', label: 'Assignee', width: 140, cls: 'text-slate-700 font-medium truncate' },
+            { key: 'Quarter', label: 'Quarter', width: 100, pad: 'pr-6', cls: 'text-slate-500 whitespace-nowrap overflow-hidden text-ellipsis' }
+        ];
+
+        document.getElementById('excelFileInput').addEventListener('change', handleFileUpload);
+        window.addEventListener('DOMContentLoaded', () => {
+            renderTableHeader();
+            populateColumnsMenu();
+            renderTileDefinitions();
+            makeColumnsResizable();
+
+            // If this file was produced by "Download HTML (with data)", the data is
+            // already baked in — load it straight away without needing a re-upload.
+            if (window.__EMBEDDED_DATA__ && Array.isArray(window.__EMBEDDED_DATA__) && window.__EMBEDDED_DATA__.length) {
+                rawData = window.__EMBEDDED_DATA__;
+                setupDropdownFilters();
+                applyFilters();
+            }
+        });
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('#columnsBtn') && !e.target.closest('#columnsMenu')) {
+                document.getElementById('columnsMenu').classList.remove('open');
+            }
+        });
+
+        function toSmartTitleCase(str) {
+            if (!str) return '';
+            return String(str).split(' ').map(word => {
+                if (!word) return '';
+                if (word === word.toUpperCase() && word.length > 1) {
+                    return word;
+                }
+                return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+            }).join(' ');
+        }
+
+        const MONTHS_DD_MMM = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+        // Parse a date value from Excel/Airtable-style exports into a real JS Date.
+        // Handles: native JS Date (cellDates:true), Excel serial numbers, ISO strings
+        // (YYYY-MM-DD), and slash/dash numeric dates. Numeric day-first dates
+        // (e.g. "12/09/2026") are read as DD-MM-YYYY, which is the convention this
+        // sheet uses — this avoids the classic MM/DD vs DD/MM swap.
+        function parseDateFlexible(val) {
+            if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+
+            if (typeof val === 'number') {
+                const parsed = (window.XLSX && XLSX.SSF) ? XLSX.SSF.parse_date_code(val) : null;
+                return parsed ? new Date(parsed.y, parsed.m - 1, parsed.d) : null;
+            }
+
+            const str = String(val).trim().replace(/^(mon|tue|wed|thu|fri|sat|sun)[a-z]*,?\s+/i, ''); // strip a leading weekday name, e.g. "Wed, 30-09-2026" -> "30-09-2026"
+            if (!str) return null;
+
+            // ISO / year-first: YYYY-MM-DD or YYYY/MM/DD
+            let m = str.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
+            if (m) {
+                const d = new Date(+m[1], +m[2] - 1, +m[3]);
+                return isNaN(d.getTime()) ? null : d;
+            }
+
+            // Day-first numeric: DD-MM-YYYY or DD/MM/YYYY
+            m = str.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/);
+            if (m) {
+                let day = +m[1], month = +m[2];
+                const year = +m[3];
+                // If the first number can't be a day-of-month, it must actually be month-first
+                if (day > 12 && month <= 12) {
+                    // already day-first, nothing to do
+                } else if (month > 12 && day <= 12) {
+                    [day, month] = [month, day];
+                }
+                const d = new Date(year, month - 1, day);
+                return isNaN(d.getTime()) ? null : d;
+            }
+
+            // Formats with a month name (e.g. "9 Dec 2026", "December 9, 2026") are
+            // unambiguous — safe to hand to the native parser.
+            if (/[A-Za-z]/.test(str)) {
+                const d = new Date(str);
+                if (!isNaN(d.getTime())) return d;
+            }
+
+            const fallback = new Date(str);
+            return isNaN(fallback.getTime()) ? null : fallback;
+        }
+
+        // Format any date-like value into DD-MMM (e.g. 12-Sep). Falls back to the
+        // original text if it can't be confidently parsed as a date.
+        function formatDateDDMMM(val) {
+            if (val === null || val === undefined || val === '') return '';
+            const d = parseDateFlexible(val);
+            if (!d) return String(val);
+            const dd = String(d.getDate()).padStart(2, '0');
+            return `${dd}-${MONTHS_DD_MMM[d.getMonth()]}`;
+        }
+
+        function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const data = new Uint8Array(evt.target.result);
+                const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: "" });
+
+                rawData = json.map(r => {
+                    const statusVal = pick(r, 'Status', 'Status (Col 1)', 'Column 1');
+                    const col2Val = pick(r, 'Status Group', 'Column 2') || getCol2FromCol1(statusVal);
+                    const quarterVal = pick(r, 'Quarter', 'Quarter (drop down)', '📅 Quarter (drop down)', '📅 Quarter') || getDynamicKey(r, 'quarter');
+
+                    return {
+                        'Task Name': toSmartTitleCase(pick(r, 'Task Name', 'Aa Task Name', 'Name')),
+                        'Institution': toSmartTitleCase(pick(r, 'Institution - Label (labels)', 'Institution - Label', 'Institution')),
+                        'Status': toSmartTitleCase(statusVal),
+                        'StatusGroup': col2Val,
+                        'Team': toSmartTitleCase(pick(r, 'Team (drop down)', 'Team') || getDynamicKey(r, 'team')),
+                        'Priority': toSmartTitleCase(pick(r, 'Priority')),
+                        'Product Priority Order': pick(r, 'Product Priority Order (drop down)', 'Product Priority Order', 'Product Priority') || getDynamicKey(r, 'product priority'),
+                        'Start date': formatDateDDMMM(pick(r, 'Start date', 'Start Date')),
+                        'Due Date': formatDateDDMMM(pick(r, 'Due Date', 'End Date', 'End date')),
+                        'Engg Efforts': pick(r, '⏳ Engg Efforts', 'â³ Engg Efforts', '# Engg Efforts', 'Engg Efforts') || getDynamicKey(r, 'effort'),
+                        'Remarks': toSmartTitleCase(pick(r, 'Remarks (short text)', 'T Remarks', 'Remarks')),
+                        'PM': toSmartTitleCase(pick(r, 'PM (users)', '8 PM', 'PM')),
+                        'Assignee': toSmartTitleCase(pick(r, 'Assignee', 'Assigned Engineer (users)', '8 Assigned Engineer', 'Assigned Engineer')),
+                        'Quarter': toSmartTitleCase(quarterVal)
+                    };
+                });
+
+                setupDropdownFilters();
+                applyFilters();
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // Case-insensitive, whitespace-tolerant lookup: tries each candidate header
+        // name in order against the row's actual keys (Excel/Airtable exports often
+        // vary in capitalization — e.g. "Remarks (Short Text)" vs "Remarks (short text)"
+        // — an exact-case bracket lookup like r['Remarks (short text)'] would silently
+        // miss those) and returns the first non-empty value found.
+        function pick(rowObj, ...candidates) {
+            for (const candidate of candidates) {
+                const target = candidate.trim().toLowerCase();
+                const foundKey = Object.keys(rowObj).find(k => k.trim().toLowerCase() === target);
+                if (foundKey !== undefined && rowObj[foundKey] !== undefined && rowObj[foundKey] !== '') {
+                    return rowObj[foundKey];
+                }
+            }
+            return '';
+        }
+
+        function getDynamicKey(rowObj, term) {
+            const foundKey = Object.keys(rowObj).find(k => k.toLowerCase().includes(term));
+            return foundKey ? rowObj[foundKey] : "";
+        }
+
+        function getCol2FromCol1(col1) {
+            const c1 = String(col1).trim().toLowerCase();
+            if (STATUS_GROUPS['Descoped'].some(s => c1.includes(s.toLowerCase()))) return 'Descoped';
+            if (STATUS_GROUPS['Blocked'].some(s => c1.includes(s.toLowerCase()))) return 'Blocked';
+            if (STATUS_GROUPS['Delivered'].some(s => c1.includes(s.toLowerCase()))) return 'Delivered';
+            if (STATUS_GROUPS['Open'].some(s => c1.includes(s.toLowerCase()))) return 'Open';
+            return 'In Progress';
+        }
+
+        function setupDropdownFilters() {
+            // Build the Team filter from whatever team names actually appear in the
+            // uploaded sheet's "Team (drop down)" column — rather than a fixed list —
+            // so the filter always matches the real data instead of silently returning
+            // zero rows when a team name doesn't exactly match a hardcoded value.
+            const knownOrder = ALLOWED_TEAMS.map(toSmartTitleCase);
+            const teamsInData = [...new Set(rawData.map(d => d.Team).filter(Boolean))];
+            const teams = [
+                ...knownOrder.filter(t => teamsInData.includes(t)),
+                ...teamsInData.filter(t => !knownOrder.includes(t)).sort()
+            ];
+            populateChoices('filterTeam', teams);
+            setupGroupedStatusFilter();
+            const quarters = [...new Set(rawData.map(d => d.Quarter).filter(Boolean))];
+            populateChoices('filterQuarter', quarters);
+            const engineers = [...new Set(rawData.map(d => d['Assignee']).filter(Boolean))];
+            populateChoices('filterEngineer', engineers);
+        }
+
+        function setupGroupedStatusFilter() {
+            const selectEl = document.getElementById('filterStatus');
+            selectEl.innerHTML = '';
+
+            Object.keys(STATUS_GROUPS).forEach(groupName => {
+                const optGroup = document.createElement('optgroup');
+                optGroup.label = groupName;
+                STATUS_GROUPS[groupName].forEach(statusVal => {
+                    const opt = document.createElement('option');
+                    opt.value = toSmartTitleCase(statusVal);
+                    opt.textContent = toSmartTitleCase(statusVal);
+                    optGroup.appendChild(opt);
+                });
+                selectEl.appendChild(optGroup);
+            });
+
+            if (choicesInstances['filterStatus']) choicesInstances['filterStatus'].destroy();
+
+            const instance = new Choices(selectEl, {
+                removeItemButton: true,
+                placeholderValue: 'Select Statuses...',
+                searchEnabled: true,
+                shouldSort: false
+            });
+            choicesInstances['filterStatus'] = instance;
+
+            // Group-level click handler (Select/Deselect all items under a group heading)
+            selectEl.addEventListener('showDropdown', () => {
+                setTimeout(() => {
+                    const dropdown = instance.containerOuter.element.querySelector('.choices__list--dropdown');
+                    if (!dropdown) return;
+
+                    dropdown.querySelectorAll('.choices__heading').forEach(heading => {
+                        heading.replaceWith(heading.cloneNode(true));
+                    });
+
+                    dropdown.querySelectorAll('.choices__heading').forEach(heading => {
+                        heading.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+
+                            const groupLabel = heading.innerText.trim();
+                            const subOptions = STATUS_GROUPS[groupLabel] ? STATUS_GROUPS[groupLabel].map(toSmartTitleCase) : [];
+
+                            const currentSelected = instance.getValue(true);
+                            const allSubSelected = subOptions.every(opt => currentSelected.includes(opt));
+
+                            if (allSubSelected) {
+                                subOptions.forEach(opt => instance.removeActiveItemsByValue(opt));
+                            } else {
+                                subOptions.forEach(opt => instance.setChoiceByValue(opt));
+                            }
+
+                            resetDrilldown();
+                            applyFilters();
+                        });
+                    });
+                }, 50);
+            });
+
+            selectEl.addEventListener('change', () => { resetDrilldown(); applyFilters(); });
+        }
+
+        function populateChoices(elementId, options) {
+            const selectEl = document.getElementById(elementId);
+            selectEl.innerHTML = '';
+            options.forEach(optVal => {
+                const opt = document.createElement('option');
+                opt.value = optVal;
+                opt.textContent = optVal;
+                selectEl.appendChild(opt);
+            });
+
+            if (choicesInstances[elementId]) choicesInstances[elementId].destroy();
+            choicesInstances[elementId] = new Choices(selectEl, {
+                removeItemButton: true,
+                placeholderValue: 'Select...',
+                searchEnabled: true
+            });
+            selectEl.addEventListener('change', () => { resetDrilldown(); applyFilters(); });
+        }
+
+        function applyFilters() {
+            let filtered = [...rawData];
+            const getSelected = id => Array.from(document.getElementById(id).selectedOptions).map(o => o.value);
+
+            const selectedTeams = getSelected('filterTeam');
+            const selectedStatuses = getSelected('filterStatus');
+            const selectedQuarters = getSelected('filterQuarter');
+            const selectedEngineers = getSelected('filterEngineer');
+
+            if (selectedTeams.length) filtered = filtered.filter(d => selectedTeams.includes(d.Team));
+            if (selectedStatuses.length) filtered = filtered.filter(d => selectedStatuses.includes(d.Status));
+            if (selectedQuarters.length) filtered = filtered.filter(d => selectedQuarters.includes(d.Quarter));
+            if (selectedEngineers.length) filtered = filtered.filter(d => selectedEngineers.includes(d['Assignee']));
+
+            globalFilteredData = filtered;
+            renderDashboard(globalFilteredData);
+        }
+
+        function applyTileDrilldown(type) {
+            if (type === 'ALL') { resetDrilldown(); return; }
+            activeDrilldownFilter = { field: 'StatusGroup', value: type, label: `KPI: ${type}` };
+            updateTableWithDrilldown();
+        }
+
+        function resetDrilldown() {
+            activeDrilldownFilter = null;
+            document.getElementById('drilldownBadge').classList.add('hidden');
+            document.getElementById('resetDrilldownBtn').classList.add('hidden');
+            renderTable(globalFilteredData);
+        }
+
+        function updateTableWithDrilldown() {
+            if (!activeDrilldownFilter) {
+                renderTable(globalFilteredData);
+                return;
+            }
+
+            let tableData = globalFilteredData.filter(d => {
+                if (activeDrilldownFilter.field === 'StatusGroup') return d.StatusGroup === activeDrilldownFilter.value;
+                if (activeDrilldownFilter.field === 'Team') return d.Team === activeDrilldownFilter.value;
+                if (activeDrilldownFilter.field === 'Bar') return d.Status === activeDrilldownFilter.status && d.Team === activeDrilldownFilter.team;
+                return true;
+            });
+
+            const badge = document.getElementById('drilldownBadge');
+            badge.innerText = `${activeDrilldownFilter.label} (${tableData.length})`;
+            badge.classList.remove('hidden');
+            document.getElementById('resetDrilldownBtn').classList.remove('hidden');
+
+            renderTable(tableData);
+        }
+
+        function renderDashboard(data) {
+            document.getElementById('kpiTotal').innerText = data.length;
+            document.getElementById('kpiOpen').innerText = data.filter(d => d.StatusGroup === 'Open').length;
+            document.getElementById('kpiDelivered').innerText = data.filter(d => d.StatusGroup === 'Delivered').length;
+            document.getElementById('kpiBlocked').innerText = data.filter(d => d.StatusGroup === 'Blocked').length;
+            document.getElementById('kpiInProgress').innerText = data.filter(d => d.StatusGroup === 'In Progress').length;
+            document.getElementById('kpiDescoped').innerText = data.filter(d => d.StatusGroup === 'Descoped').length;
+
+            renderDonutChart(data);
+            renderBarChart(data);
+            updateTableWithDrilldown();
+        }
+
+        // Build the "includes: ..." tooltip text on each KPI tile from STATUS_GROUPS
+        function renderTileDefinitions() {
+            const map = {
+                'Open': 'tileDefOpen',
+                'In Progress': 'tileDefInProgress',
+                'Delivered': 'tileDefDelivered',
+                'Blocked': 'tileDefBlocked',
+                'Descoped': 'tileDefDescoped'
+            };
+            Object.keys(map).forEach(group => {
+                const el = document.getElementById(map[group]);
+                if (el) {
+                    const statuses = (STATUS_GROUPS[group] || []).map(toSmartTitleCase).join(', ');
+                    el.innerText = `Includes: ${statuses}`;
+                }
+            });
+        }
+
+        function renderDonutChart(data) {
+            const counts = {};
+            data.forEach(d => { counts[d.Team || 'Unassigned'] = (counts[d.Team || 'Unassigned'] || 0) + 1; });
+
+            const labels = Object.keys(counts);
+            const colors = labels.map(l => TEAM_COLORS[l] || '#94a3b8');
+
+            const ctx = document.getElementById('donutChart').getContext('2d');
+            if (donutChartInstance) donutChartInstance.destroy();
+
+            donutChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{ data: Object.values(counts), backgroundColor: colors, borderWidth: 2, borderColor: '#ffffff' }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } } },
+                    onClick: (evt, elements) => {
+                        if (elements.length > 0) {
+                            const selectedTeam = labels[elements[0].index];
+                            activeDrilldownFilter = { field: 'Team', value: selectedTeam, label: `Team: ${selectedTeam}` };
+                            updateTableWithDrilldown();
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderBarChart(data) {
+            const allStatuses = Object.values(STATUS_GROUPS).flat().map(toSmartTitleCase);
+            const statusLabels = allStatuses.filter(s => data.some(d => d.Status === s));
+            if (!statusLabels.length) statusLabels.push(...new Set(data.map(d => d.Status).filter(Boolean)));
+
+            const activeTeams = ALLOWED_TEAMS.map(toSmartTitleCase).filter(t => data.some(d => d.Team === t));
+
+            const datasets = activeTeams.map(team => ({
+                label: team,
+                data: statusLabels.map(st => data.filter(d => d.Status === st && d.Team === team).length),
+                backgroundColor: TEAM_COLORS[team] || '#94a3b8',
+                borderRadius: 4
+            }));
+
+            const ctx = document.getElementById('barChart').getContext('2d');
+            if (barChartInstance) barChartInstance.destroy();
+
+            barChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: { labels: statusLabels, datasets: datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { stacked: true, grid: { display: false } },
+                        y: { stacked: true, grid: { color: '#f1f5f9' } }
+                    },
+                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } } },
+                    onClick: (evt, elements) => {
+                        if (elements.length > 0) {
+                            const element = elements[0];
+                            const selectedStatus = statusLabels[element.index];
+                            const selectedTeam = datasets[element.datasetIndex].label;
+
+                            activeDrilldownFilter = {
+                                field: 'Bar',
+                                status: selectedStatus,
+                                team: selectedTeam,
+                                label: `${selectedTeam} • ${selectedStatus}`
+                            };
+                            updateTableWithDrilldown();
+                        }
+                    }
+                }
+            });
+        }
+
+        // Build the <thead> row from COLUMNS config (drives labels + hide/show + resize)
+        function renderTableHeader() {
+            const headRow = document.getElementById('tableHeadRow');
+            headRow.innerHTML = COLUMNS.map(col => {
+                const padClass = col.pad ? ' ' + col.pad : '';
+                const hiddenClass = hiddenColumns.has(col.key) ? ' col-hidden' : '';
+                return `<th data-col="${escapeAttr(col.key)}" class="resizable p-3.5${padClass}${hiddenClass}" style="width:${col.width}px">${col.label}</th>`;
+            }).join('');
+        }
+
+        function escapeAttr(str) {
+            return String(str).replace(/"/g, '&quot;');
+        }
+
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+        }
+
+        // Render Banded Table Rows (even:bg-slate-50/50), driven by COLUMNS config
+        function renderTable(data) {
+            currentTableData = data;
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+
+            if (!data.length) {
+                tbody.innerHTML = `<tr><td colspan="${COLUMNS.length}" class="text-center p-8 text-slate-400">No tasks found matching current filters.</td></tr>`;
+                return;
+            }
+
+            data.forEach((row, index) => {
+                const tr = document.createElement('tr');
+                tr.className = `${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'} hover:bg-indigo-50/40 transition-colors duration-150`;
+                tr.innerHTML = COLUMNS.map(col => renderCell(row, col)).join('');
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderCell(row, col) {
+            const hiddenClass = hiddenColumns.has(col.key) ? ' col-hidden' : '';
+            const padClass = col.pad ? ' ' + col.pad : '';
+            const baseCls = col.cls ? ' ' + col.cls : '';
+            let content;
+
+            if (col.key === 'Status') {
+                const groupName = row['StatusGroup'] || 'In Progress';
+                const statusBoxStyle = STATUS_BOX_COLORS[groupName] || 'bg-slate-100 text-slate-600 border-slate-200/80';
+                content = `<span class="inline-block w-full text-center px-2.5 py-1 rounded-md text-[11px] font-semibold border ${statusBoxStyle}">${escapeHtml(row['Status']) || '-'}</span>`;
+            } else if (col.key === 'Team') {
+                const teamHex = TEAM_COLORS[row['Team']] || '#64748b';
+                content = `<span class="inline-block px-2.5 py-1 rounded-md text-[11px] font-semibold text-white shadow-sm" style="background-color: ${teamHex}">${escapeHtml(row['Team']) || '-'}</span>`;
+            } else {
+                content = escapeHtml(row[col.key]) || '-';
+            }
+
+            return `<td data-col="${escapeAttr(col.key)}" class="p-3.5${padClass}${baseCls}${hiddenClass}">${content}</td>`;
+        }
+
+        // --- Column show/hide ---
+        function populateColumnsMenu() {
+            const list = document.getElementById('columnsMenuList');
+            list.innerHTML = COLUMNS.map(col => `
+                <label class="flex items-center gap-2 px-2 py-1.5 text-xs text-slate-600 hover:bg-slate-50 rounded cursor-pointer">
+                    <input type="checkbox" ${hiddenColumns.has(col.key) ? '' : 'checked'} onchange="toggleColumn('${escapeAttr(col.key)}', this.checked)">
+                    ${col.label}
+                </label>
+            `).join('');
+        }
+
+        function toggleColumn(key, visible) {
+            if (visible) hiddenColumns.delete(key); else hiddenColumns.add(key);
+            document.querySelectorAll(`[data-col="${CSS.escape(key)}"]`).forEach(el => {
+                el.classList.toggle('col-hidden', !visible);
+            });
+        }
+
+        function showAllColumns() {
+            hiddenColumns.clear();
+            document.querySelectorAll('[data-col]').forEach(el => el.classList.remove('col-hidden'));
+            populateColumnsMenu();
+        }
+
+        function toggleMenu(id) {
+            const menu = document.getElementById(id);
+            menu.classList.toggle('open');
+        }
+
+        // --- Export ---
+        function getVisibleColumns() {
+            return COLUMNS.filter(c => !hiddenColumns.has(c.key));
+        }
+
+        function getExportValue(row, col) {
+            if (col.key === 'Engg Efforts') {
+                const n = Number(row[col.key]);
+                return isNaN(n) || row[col.key] === '' ? (row[col.key] || '') : n;
+            }
+            return row[col.key] || '';
+        }
+
+        function exportExcel() {
+            const visibleCols = getVisibleColumns();
+            const dataToExport = (currentTableData.length ? currentTableData : rawData).map(row => {
+                const obj = {};
+                visibleCols.forEach(c => { obj[c.label] = getExportValue(row, c); });
+                return obj;
+            });
+
+            if (!dataToExport.length) { alert('No data to export. Upload an Excel sheet first.'); return; }
+
+            const ws = XLSX.utils.json_to_sheet(dataToExport);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Tasks');
+            XLSX.writeFile(wb, 'feature_status_dashboard.xlsx');
+        }
+
+        function exportPDF() {
+            const dataSet = currentTableData.length ? currentTableData : rawData;
+            if (!dataSet.length) { alert('No data to export. Upload an Excel sheet first.'); return; }
+            if (!window.jspdf && !window.jsPDF) { alert('PDF library failed to load. Check your network connection.'); return; }
+
+            const JsPdfCtor = window.jspdf ? window.jspdf.jsPDF : window.jsPDF;
+            const doc = new JsPdfCtor({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+
+            const visibleCols = getVisibleColumns();
+            const head = [visibleCols.map(c => c.label)];
+            const body = dataSet.map(row => visibleCols.map(c => String(getExportValue(row, c))));
+
+            doc.setFontSize(14);
+            doc.text('Feature Status Dashboard', 40, 30);
+
+            doc.autoTable({
+                head: head,
+                body: body,
+                startY: 45,
+                styles: { fontSize: 7, cellPadding: 4, overflow: 'linebreak' },
+                headStyles: { fillColor: [79, 70, 229], textColor: 255, fontStyle: 'bold' },
+                alternateRowStyles: { fillColor: [248, 250, 252] },
+                margin: { left: 30, right: 30 }
+            });
+
+            doc.save('feature_status_dashboard.pdf');
+        }
+
+        // Produces a standalone copy of this dashboard file with the currently loaded
+        // data baked in, so it opens with the data already there — no re-upload needed.
+        function downloadHtmlWithData() {
+            if (!rawData.length) { alert('Upload an Excel sheet first, then download this snapshot.'); return; }
+
+            // Both tags below are built by splitting the string in two, so this line's
+            // own text never contains a contiguous script-open/script-close pair with
+            // __EMBEDDED_DATA__ in between — otherwise (a) the HTML parser would treat
+            // a literal closing tag written here as ending our own <script> block, and
+            // (b) the cleanup regex below would match this very line instead of an
+            // actual previously-embedded data block.
+            const dataScript = '<scr' + 'ipt>window.__EMBEDDED_DATA__ = ' + JSON.stringify(rawData) + ';</scr' + 'ipt>\n';
+            // Replace any previously embedded snapshot data so re-downloading a snapshot
+            // doesn't stack multiple data blocks on top of each other.
+            let html = PRISTINE_HTML.replace(/<script>window\.__EMBEDDED_DATA__[\s\S]*?<\/script>\s*/, '');
+            // Anchor to the closing </body></html> at the very end of the document —
+            // a plain string search would instead match the "</body>" text that
+            // appears inside this very function's own source code above.
+            html = html.replace(/<\/body>(\s*<\/html>\s*)$/i, dataScript + '</body>$1');
+
+            const blob = new Blob(['<!DOCTYPE html>\n' + html], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'feature-status-dashboard-snapshot.html';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function makeColumnsResizable() {
+            const table = document.getElementById('taskTable');
+
+            const attachHandlers = (col) => {
+                if (col.querySelector('.resizer')) return;
+                const resizer = document.createElement('div');
+                resizer.classList.add('resizer');
+                col.appendChild(resizer);
+
+                let x = 0;
+                let w = 0;
+
+                const mouseDownHandler = function(e) {
+                    x = e.clientX;
+                    const styles = window.getComputedStyle(col);
+                    w = parseInt(styles.width, 10);
+
+                    document.addEventListener('mousemove', mouseMoveHandler);
+                    document.addEventListener('mouseup', mouseUpHandler);
+                    resizer.classList.add('resizing');
+                };
+
+                const mouseMoveHandler = function(e) {
+                    const dx = e.clientX - x;
+                    col.style.width = `${w + dx}px`;
+                };
+
+                const mouseUpHandler = function() {
+                    document.removeEventListener('mousemove', mouseMoveHandler);
+                    document.removeEventListener('mouseup', mouseUpHandler);
+                    resizer.classList.remove('resizing');
+                };
+
+                resizer.addEventListener('mousedown', mouseDownHandler);
+            };
+
+            table.querySelectorAll('th.resizable').forEach(attachHandlers);
+        }
+    </script>
+</body>
+</html>
